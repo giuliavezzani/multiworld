@@ -6,6 +6,7 @@ from multiworld.envs.env_util import get_stat_in_paths, \
     create_stats_ordered_dict, get_asset_full_path
 from multiworld.core.multitask_env import MultitaskEnv
 from multiworld.envs.mujoco.sawyer_xyz.base import SawyerXYZEnv
+from skimage.transform import rescale, resize, downscale_local_mean, rotate
 
 
 class SawyerPickPlaceEnv(MultitaskEnv, SawyerXYZEnv):
@@ -106,9 +107,9 @@ class SawyerPickPlaceEnv(MultitaskEnv, SawyerXYZEnv):
 
         img = self.sim.render(700, 700, mode='offscreen', camera_name="camera_images")
 
-        #img = resize(img, (84,84))
+        img = resize(img, (84,84))
 
-        #img = rotate(img, 90)
+        img = rotate(img, 180)
 
         #img = img[0:500:8, 0:500:8, :]
         #import IPython
