@@ -18,7 +18,7 @@ Usage:
 
     <geom name="floor" type="plane" pos="0 0 -.9" size="10 10 0.5"
           rgba="0 0 0 1" contype="0" conaffinity="0" />
-    <geom name="tableTop" type="box" pos="0 0.7 -0.01" size="0.4 0.3 0.01"
+    <geom name="tableTop" type="box" pos="0 0.7 -0.01" size="0.43 0.43 0.01"
           rgba=".6 .6 .5 1" contype="1" conaffinity="1" />
 
     <body name="base" pos="0 0 0">
@@ -117,20 +117,20 @@ Usage:
                                         <geom size="0.055 0.025" pos="0 0.015 -0.01" type="cylinder" rgba="0.5 0.1 0.1 0" />
                                         <body name="right_hand" pos="0 0 0.0245" quat="0.707107 0 0 0.707107">
                                             <inertial pos="1e-08 1e-08 1e-08" quat="0.820473 0.339851 -0.17592 0.424708" mass="1e-08" diaginertia="1e-08 1e-08 1e-08" />
-                                            
+
 
                                             <geom type="mesh" contype="1" conaffinity="1" group="1" rgba="0.5 0.1 0.1 1" pos= "0 0 0.03" mesh="eGripperBase" />
-                                            
+
                                             <geom size="0.035 0.014" pos="0 0 0.015" type="cylinder" rgba="0 0 0 1"/>
 
 <!--  ================= BEGIN GRIPPER ================= /-->
-                                                
+
 
 
                                             <body name="hand" pos="0 0 0.12" quat="-1 0 1 0">
 
                                                 <geom name="rail" type="box" pos="-0.05 0 0" density="7850" size="0.005 0.055 0.005" friction="0.001 0.005 0.0001" rgba="0.5 0.5 0.5 1.0" />
-                                                 
+
 
 
                                                 <body name="rightclaw" pos="0 -0.05 0" >
@@ -141,29 +141,29 @@ Usage:
                                                     <site name="rightEndEffector" pos="0.035 0 0" size="0.01" />
 
                                                     <!--geom name="rightclaw_it" class="1" type="box" density="7850" pos="0 0 0" size="0.045 0.005 0.005" friction="0.001 0.005 0.0001" rgba="1.0 1.0 1.0 1.0"/-->
-                                                   
+
 
                                                     <!-- joint name="r_close" type="slide" pos="0 0 0" axis="0 1 0" range= "0 0.03"    limited="true" damping="1"/-->
                                                 </body>
 
 
-                                              
-                                              
+
+
                                                 <body name="leftclaw" pos="0 0.05 0">
 
-                                                
+
                                                     <geom name="leftclaw_it" condim="4" margin="0.001" type="box" user="0" pos="0 0 0" size="0.045 0.005 0.005"  rgba="0 1 1 1.0" />
                                                     <joint name="l_close" pos="0 0 0" axis="0 1 0" range= "-0.03 0" armature="100" damping="1000" limited="true" solimplimit="0.99 0.999 0.01" solreflimit="0.01 1" type="slide"/>
 
                                                     <site name="leftEndEffector" pos="0.035 0 0" size="0.01" />
-                                                
-                                                     
-                                                
-                                                    
+
+
+
+
                                                 </body>
                                             </body>
 
-                            
+
 <!--  ================= END GRIPPER ================= /-->
                                         </body>
 

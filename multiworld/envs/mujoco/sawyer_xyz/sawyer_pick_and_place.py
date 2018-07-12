@@ -60,7 +60,7 @@ class SawyerPickPlaceEnv(MultitaskEnv, SawyerXYZEnv):
 
 
 
-        
+
 
         self.hide_goal_markers = hide_goal_markers
 
@@ -76,7 +76,7 @@ class SawyerPickPlaceEnv(MultitaskEnv, SawyerXYZEnv):
             ('observation', self.hand_and_obj_space),
             ('desired_goal', self.hand_and_obj_space),
             ('achieved_goal', self.hand_and_obj_space),
-           
+
             ('state_observation', self.hand_and_obj_space),
             ('state_desired_goal', self.hand_and_obj_space),
             ('state_achieved_goal', self.hand_and_obj_space),
@@ -99,24 +99,41 @@ class SawyerPickPlaceEnv(MultitaskEnv, SawyerXYZEnv):
         # self.viewer.cam.azimuth = 270
         # self.viewer.cam.trackbodyid = -1
 
+
+    def get_images(self):
+        #import IPython
+        #IPython.embed()
+
+        img = self.sim.render(700, 700, mode='offscreen', camera_name="camera_images")
+
+        #img = resize(img, (84,84))
+
+        #img = rotate(img, 90)
+
+        #img = img[0:500:8, 0:500:8, :]
+        #import IPython
+        #IPython.embed()
+        #img = np.zeros(shape=(84,84,3))
+        return img
+
     def step(self, action):
 
 
         self.set_xyz_action(action[:3])
 
 
-       
-        
+
+
         self.do_simulation([action[-1], -action[-1]])
         # The marker seems to get reset every time you do a simulation
         self._set_goal_marker(self._state_goal)
         ob = self._get_obs()
-       
+
 
         reward , pickRew, placeRew = self.compute_rewards(action, ob)
         self.curr_path_length +=1
 
-       
+
         #info = self._get_info()
 
         if self.curr_path_length == self.max_path_length:
@@ -171,12 +188,12 @@ class SawyerPickPlaceEnv(MultitaskEnv, SawyerXYZEnv):
         self.data.site_xpos[self.model.site_name2id('goal')] = (
             goal[:3]
         )
-       
+
         if self.hide_goal_markers:
             self.data.site_xpos[self.model.site_name2id('goal'), 2] = (
                 -1000
             )
-           
+
 
     def _set_obj_xyz(self, pos):
         qpos = self.data.qpos.flat.copy()
@@ -188,7 +205,7 @@ class SawyerPickPlaceEnv(MultitaskEnv, SawyerXYZEnv):
 
     def reset_model(self):
 
-        
+
 
         self._reset_hand()
         goal = self.sample_goal()
@@ -269,10 +286,10 @@ class SawyerPickPlaceEnv(MultitaskEnv, SawyerXYZEnv):
         # goals[num_objs_in_hand:, 5] = self.obj_init_pos[2]
         return {
             'state_desired_goal': goals,
-            
+
         }
 
-    
+
 
     def get_site_pos(self, siteName):
         _id = self.model.site_names.index(siteName)
@@ -283,16 +300,16 @@ class SawyerPickPlaceEnv(MultitaskEnv, SawyerXYZEnv):
 
 
     def compute_rewards(self, actions, obs):
-           
+
         rightFinger, leftFinger = self.get_site_pos('rightEndEffector'), self.get_site_pos('leftEndEffector')
-       
+
         heightTarget = self._state_goal[3]
         placingGoal = self._state_goal[:3]
 
         objPos = self.get_body_com("obj")
-      
 
-        
+
+
         fingerCOM = (rightFinger + leftFinger)/2
 
 
@@ -325,11 +342,11 @@ class SawyerPickPlaceEnv(MultitaskEnv, SawyerXYZEnv):
 
             if self.pickCompleted and graspAttained():
                 return 10*heightTarget
-       
+
             elif (objPos[2]> 0.025) and graspAttained():
-                
+
                 return 10* min(heightTarget, objPos[2])
-         
+
             else:
                 return 0
 
@@ -338,28 +355,28 @@ class SawyerPickPlaceEnv(MultitaskEnv, SawyerXYZEnv):
 
             placingDist = np.linalg.norm(objPos - placingGoal)
             #print(placingDist)
-          
+
 
             if self.pickCompleted and graspAttained():
 
                 placeRew = max(100*(self.maxPlacingDist - placingDist),0)
-               
+
 
                 return placeRew
 
             else:
-                return 0 
+                return 0
 
         pickRew = pickReward()
         placeRew = placeReward()
         reward = graspRew + pickRew + placeRew
 
 
-       
-        return [reward, pickRew, placeRew] 
+
+        return [reward, pickRew, placeRew]
         #returned in a list because that's how compute_reward in multiTask.env expects it
 
-   
+
 
     def get_diagnostics(self, paths, prefix=''):
         statistics = OrderedDict()
@@ -397,3 +414,18 @@ class SawyerPickPlaceEnv(MultitaskEnv, SawyerXYZEnv):
         super().set_env_state(base_state)
         self._state_goal = goal
         self._set_goal_marker(goal)
+
+
+if __name__ == "__main__":
+    env = SawyerPickPlaceEnv()
+    env.reset()
+    t = 0
+    while t<10000:
+        env.step(np.random.rand(3))
+        env.render()
+        #img = env.get_images()
+        #print('TEST!!!')
+        t += 1
+    # env.render()
+        import IPython
+        IPython.embed()
