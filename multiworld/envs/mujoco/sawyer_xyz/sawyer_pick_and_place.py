@@ -1,5 +1,6 @@
 from collections import OrderedDict
 import numpy as np
+import pickle
 from gym.spaces import Box, Dict
 
 from multiworld.envs.env_util import get_stat_in_paths, \
@@ -10,24 +11,14 @@ from skimage.transform import rescale, resize, downscale_local_mean, rotate
 
 
 class SawyerPickPlaceEnv(MultitaskEnv, SawyerXYZEnv):
-    def __init__(
-            self,
-            obj_low=None,
-            obj_high=None,
-
-            reward_type='hand_and_obj_distance',
-            indicator_threshold=0.06,
-
-            obj_init_pos=(0, 0.6, 0.02),
-
-            fix_goal=True,
+    def __init__(self,obj_low=None,obj_high=None, use_reward='yes',sparse='yes',
+            indicator_threshold=0.06,obj_init_pos=(0, 0.6, 0.02),fix_goal=True,
             fixed_goal= (0, 0.85, 0.02, 0.1) ,
             #3D placing goal, followed by height target for picking
-            goal_low=None,
-            goal_high=None,
-
+            goal_low=None,goal_high=None,
             hide_goal_markers=False,
-
+            task=0, radius_reward=0.1,
+            file_goals=None,
             **kwargs
     ):
         self.quick_init(locals())
@@ -37,31 +28,31 @@ class SawyerPickPlaceEnv(MultitaskEnv, SawyerXYZEnv):
             model_name=self.model_name,
             **kwargs
         )
-        if obj_low is None:
-            obj_low = self.hand_low
-        if obj_high is None:
-            obj_high = self.hand_high
+        #if obj_low is None:
+        #    obj_low = self.hand_low
+        #if obj_high is None:
+        #    obj_high = self.hand_high
 
-        if goal_low is None:
-            goal_low = np.hstack((self.hand_low, obj_low))
-        if goal_high is None:
-            goal_high = np.hstack((self.hand_high, obj_high))
-
+        #if goal_low is None:
+        #    goal_low = np.hstack((self.hand_low, obj_low))
+        #if goal_high is None:
+        #    goal_high = np.hstack((self.hand_high, obj_high))
 
         self.max_path_length = 150
 
-        self.reward_type = reward_type
+        self.use_reward = use_reward
+        self.sparse = sparse
+        self.choice = task
+        if file_goals == None:
+            self.all_goals = np.zeros(10)
+        else:
+            self.all_goals = pickle.load(open(file_goals, "rb"))
         self.indicator_threshold = indicator_threshold
-
+        self.radius_reward = radius_reward
         self.obj_init_pos = np.array(obj_init_pos)
 
         self.fix_goal = fix_goal
         self.fixed_goal = np.array(fixed_goal)
-
-
-
-
-
 
         self.hide_goal_markers = hide_goal_markers
 
@@ -90,58 +81,38 @@ class SawyerPickPlaceEnv(MultitaskEnv, SawyerXYZEnv):
         return get_asset_full_path('sawyer_xyz/sawyer_pick_and_place.xml')
 
     def viewer_setup(self):
-        pass
+        #pass
         # self.viewer.cam.trackbodyid = 0
         # self.viewer.cam.lookat[0] = 0
         # self.viewer.cam.lookat[1] = 1.0
         # self.viewer.cam.lookat[2] = 0.5
         # self.viewer.cam.distance = 0.3
-        # self.viewer.cam.elevation = -45
-        # self.viewer.cam.azimuth = 270
+         self.viewer.cam.elevation = -70
+         self.viewer.cam.azimuth = 270
         # self.viewer.cam.trackbodyid = -1
 
 
     def get_images(self):
-        #import IPython
-        #IPython.embed()
-
         img = self.sim.render(700, 700, mode='offscreen', camera_name="camera_images")
-
         img = resize(img, (84,84))
-
         img = rotate(img, 180)
-
-        #img = img[0:500:8, 0:500:8, :]
-        #import IPython
-        #IPython.embed()
-        #img = np.zeros(shape=(84,84,3))
         return img
 
     def step(self, action):
-
-
         self.set_xyz_action(action[:3])
-
-
-
-
         self.do_simulation([action[-1], -action[-1]])
+
         # The marker seems to get reset every time you do a simulation
-        self._set_goal_marker(self._state_goal)
+        #self._set_goal_marker(self._state_goal)
         ob = self._get_obs()
-
-
-        reward , pickRew, placeRew = self.compute_rewards(action, ob)
+        reward = self.compute_rewards(action, ob)
         self.curr_path_length +=1
-
-
         #info = self._get_info()
-
         if self.curr_path_length == self.max_path_length:
             done = True
         else:
             done = False
-        return ob, reward, done, {'pickRew':pickRew, 'placeRew': placeRew}
+        return ob, reward, done
 
     def _get_obs(self):
         e = self.get_endeff_pos()
@@ -206,8 +177,7 @@ class SawyerPickPlaceEnv(MultitaskEnv, SawyerXYZEnv):
 
     def reset_model(self):
 
-
-
+        ## Add reset with goals (just at the beginning)
         self._reset_hand()
         goal = self.sample_goal()
         self._state_goal = goal['state_desired_goal']
@@ -223,8 +193,6 @@ class SawyerPickPlaceEnv(MultitaskEnv, SawyerXYZEnv):
         heightTarget , placingGoal = self._state_goal[3], self._state_goal[:3]
 
         self.maxPlacingDist = np.linalg.norm([init_obj[0], init_obj[1], heightTarget] - placingGoal) + heightTarget
-
-
 
         return self._get_obs()
 
@@ -296,10 +264,6 @@ class SawyerPickPlaceEnv(MultitaskEnv, SawyerXYZEnv):
         _id = self.model.site_names.index(siteName)
         return self.data.site_xpos[_id].copy()
 
-
-
-
-
     def compute_rewards(self, actions, obs):
 
         rightFinger, leftFinger = self.get_site_pos('rightEndEffector'), self.get_site_pos('leftEndEffector')
@@ -308,7 +272,6 @@ class SawyerPickPlaceEnv(MultitaskEnv, SawyerXYZEnv):
         placingGoal = self._state_goal[:3]
 
         objPos = self.get_body_com("obj")
-
 
 
         fingerCOM = (rightFinger + leftFinger)/2
@@ -368,16 +331,12 @@ class SawyerPickPlaceEnv(MultitaskEnv, SawyerXYZEnv):
             else:
                 return 0
 
-        pickRew = pickReward()
+        #pickRew = pickReward()
         placeRew = placeReward()
-        reward = graspRew + pickRew + placeRew
+        reward = graspRew + placeRew # + pickRew
 
-
-
-        return [reward, pickRew, placeRew]
+        return [reward]
         #returned in a list because that's how compute_reward in multiTask.env expects it
-
-
 
     def get_diagnostics(self, paths, prefix=''):
         statistics = OrderedDict()
@@ -428,5 +387,5 @@ if __name__ == "__main__":
         #print('TEST!!!')
         t += 1
     # env.render()
-        import IPython
-        IPython.embed()
+        #import IPython
+        #IPython.embed()
