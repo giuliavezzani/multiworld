@@ -10,62 +10,64 @@ from multiworld.envs.mujoco.sawyer_xyz.base import SawyerXYZEnv
 from skimage.transform import rescale, resize, downscale_local_mean, rotate
 
 
-class SawyerPickPlaceEnv(MultitaskEnv, SawyerXYZEnv):
-    def __init__(self,obj_low=None,obj_high=None, use_reward='yes',sparse='yes',
-            indicator_threshold=0.06,obj_init_pos=(0, 0.6, 0.02),fix_goal=True,
-            fixed_goal= (0, 0.85, 0.02, 0.1) ,
-            #3D placing goal, followed by height target for picking
-            goal_low=None,goal_high=None,
-            hide_goal_markers=False,
-            task=0, radius_reward=0.1,
-            file_goals=None, file_env=None,
+class SawyerPusherEnv(MultitaskEnv, SawyerXYZEnv):
+    def __init__(self,
+            use_reward='yes',
+            sparse='yes',
+            task=0,
+            radius_reward=0.1,
+            file_goals="goals_sawyer_pusher_10tests_tasks.pkl",
+            #file_goals=None,
+            file_env=None,
             **kwargs
     ):
         self.quick_init(locals())
         MultitaskEnv.__init__(self)
+
+        self.file_goals = file_goals
+        if file_env == None:
+            self.file_env = 'sawyer_xyz/sawyer_pick_and_place.xml'
+        else:
+            self.file_env = file_env
+
         SawyerXYZEnv.__init__(
             self,
             model_name=self.model_name,
             **kwargs
         )
-        #if obj_low is None:
-        #    obj_low = self.hand_low
-        #if obj_high is None:
-        #    obj_high = self.hand_high
 
-        #if goal_low is None:
-        #    goal_low = np.hstack((self.hand_low, obj_low))
-        #if goal_high is None:
-        #    goal_high = np.hstack((self.hand_high, obj_high))
-
-        self.max_path_length = 150
-
-        self.use_reward = use_reward
-        self.sparse = sparse
         self.choice = task
+        self.sparse = sparse
+        self.max_path_length = 150
+        self.use_reward = use_reward
+        self.radius_reward = radius_reward
+
         if file_goals == None:
-            self.all_goals = np.zeros(10)
+            self.all_goals = [np.zeros(10)]
         else:
             self.all_goals = pickle.load(open(file_goals, "rb"))
 
-        self.indicator_threshold = indicator_threshold
-        self.radius_reward = radius_reward
-        self.obj_init_pos = np.array(obj_init_pos)
-
-        self.fix_goal = fix_goal
-        self.fixed_goal = np.array(fixed_goal)
-
-        self.hide_goal_markers = hide_goal_markers
 
         self.action_space = Box(
             np.array([-1, -1, -1, -1]),
             np.array([1, 1, 1, 1]),
         )
+
+        #if obj_low is None:
+        obj_low = self.hand_low
+        #if obj_high is None:
+        obj_high = self.hand_high
+
+        #if goal_low is None:
+        goal_low = np.hstack((self.hand_low, obj_low))
+#    if goal_high is None:
+        goal_high = np.hstack((self.hand_high, obj_high))
+
         self.hand_and_obj_space = Box(
-            np.hstack((self.hand_low, obj_low)),
-            np.hstack((self.hand_high, obj_high)),
+            np.hstack((self.hand_low, obj_low, obj_low, obj_low, obj_low)),
+            np.hstack((self.hand_high, obj_high, obj_high, obj_high, obj_high)),
         )
-        self.observation_space = Dict([
+        """self.observation_space = Dict([
             ('observation', self.hand_and_obj_space),
             ('desired_goal', self.hand_and_obj_space),
             ('achieved_goal', self.hand_and_obj_space),
@@ -73,13 +75,18 @@ class SawyerPickPlaceEnv(MultitaskEnv, SawyerXYZEnv):
             ('state_observation', self.hand_and_obj_space),
             ('state_desired_goal', self.hand_and_obj_space),
             ('state_achieved_goal', self.hand_and_obj_space),
-        ])
+        ])"""
 
-        self.reset()
+        self.observation_space = self.hand_and_obj_space
+
+        #import IPython
+        #IPython.embed()
+
+        self.reset_model()
 
     @property
     def model_name(self):
-        return get_asset_full_path('sawyer_xyz/sawyer_pick_and_place.xml')
+        return get_asset_full_path(self.file_env)
 
     def viewer_setup(self):
         #pass
@@ -87,8 +94,8 @@ class SawyerPickPlaceEnv(MultitaskEnv, SawyerXYZEnv):
         # self.viewer.cam.lookat[0] = 0
         # self.viewer.cam.lookat[1] = 1.0
         # self.viewer.cam.lookat[2] = 0.5
-        # self.viewer.cam.distance = 0.3
-         self.viewer.cam.elevation = -70
+         self.viewer.cam.distance = 2.1
+         self.viewer.cam.elevation = -30
          self.viewer.cam.azimuth = 270
         # self.viewer.cam.trackbodyid = -1
 
@@ -96,13 +103,18 @@ class SawyerPickPlaceEnv(MultitaskEnv, SawyerXYZEnv):
     def get_images(self):
         img = self.sim.render(700, 700, mode='offscreen', camera_name="camera_images")
         img = resize(img, (84,84))
-        img = rotate(img, 180)
+        #img = rotate(img, 180)
         return img
 
     def step(self, action):
+        #action = action / np.linalg.norm(action)
         self.set_xyz_action(action[:3])
         self.do_simulation([action[-1], -action[-1]])
 
+        #print(action)
+
+        #import IPython
+        #IPython.embed()
         # The marker seems to get reset every time you do a simulation
         #self._set_goal_marker(self._state_goal)
         ob = self._get_obs()
@@ -113,21 +125,24 @@ class SawyerPickPlaceEnv(MultitaskEnv, SawyerXYZEnv):
             done = True
         else:
             done = False
-        return ob, reward, done
+        return ob, reward, done, dict()
 
     def _get_obs(self):
         e = self.get_endeff_pos()
         b = self.get_obj_pos()
         flat_obs = np.concatenate((e, b))
 
-        return dict(
+        #print(flat_obs)
+
+        return flat_obs
+        """return dict(
             observation=flat_obs,
             desired_goal=self._state_goal,
             achieved_goal=flat_obs,
             state_observation=flat_obs,
             state_desired_goal=self._state_goal,
             state_achieved_goal=flat_obs,
-        )
+        )"""
 
     def _get_info(self):
         hand_goal = self._state_goal[:3]
@@ -151,7 +166,11 @@ class SawyerPickPlaceEnv(MultitaskEnv, SawyerXYZEnv):
         )
 
     def get_obj_pos(self):
-        return self.data.get_body_xpos('obj').copy()
+        return np.concatenate((self.data.get_body_xpos('obj').copy(),
+                               self.data.get_body_xpos('obj2').copy(),
+                               self.data.get_body_xpos('obj3').copy(),
+                               self.data.get_body_xpos('obj4').copy()))
+
 
     def _set_goal_marker(self, goal):
         """
@@ -162,13 +181,8 @@ class SawyerPickPlaceEnv(MultitaskEnv, SawyerXYZEnv):
             goal[:3]
         )
 
-        if self.hide_goal_markers:
-            self.data.site_xpos[self.model.site_name2id('goal'), 2] = (
-                -1000
-            )
 
-
-    def _set_obj_xyz(self, pos):
+    def _set_objs_xyz(self, pos):
         qpos = self.data.qpos.flat.copy()
         qvel = self.data.qvel.flat.copy()
 
@@ -180,35 +194,53 @@ class SawyerPickPlaceEnv(MultitaskEnv, SawyerXYZEnv):
 
         ## Add reset with goals (just at the beginning)
         self._reset_hand()
-        goal = self.sample_goal()
-        self._state_goal = goal['state_desired_goal']
-        self._set_goal_marker(self._state_goal)
 
-        self._set_obj_xyz(self.obj_init_pos)
+        self.goal_data = self.all_goals[self.choice]
+        self.blockchoice = 0
+        self._state_goal = goal_pos = self.goal_data[0:2]
+
+        blockpositions = self.goal_data[2:]
+
+        body_pos = self.sim.model.body_pos.copy()
+        self.sim.model.body_pos[-1][0] = goal_pos[0]
+        self.sim.model.body_pos[-1][1] = goal_pos[1]
+        #self.sim.model.body_pos[-5:-1][:, 0] = blockpositions[0::2]
+        #self.sim.model.body_pos[-5:-1][:, 1] = blockpositions[1::2]
+
+
+        for i in range(0,int(len(blockpositions)/2)):
+            #print(i)
+            pos_3d = np.zeros(3)
+            pos_3d[0:2] = blockpositions[2*i:2*i+2]
+            pos_3d[2] = 0.02
+            self._set_obj_xyz(pos_3d,i)
+
+        #import IPython
+        #IPython.embed()
+
+        #print(blockpositions)
+
 
         self.curr_path_length = 0
-        self.pickCompleted = False
-
-        init_obj = self.obj_init_pos
-
-        heightTarget , placingGoal = self._state_goal[3], self._state_goal[:3]
-
-        self.maxPlacingDist = np.linalg.norm([init_obj[0], init_obj[1], heightTarget] - placingGoal) + heightTarget
 
         return self._get_obs()
+
+    def _set_obj_xyz(self, pos, i):
+        qpos = self.data.qpos.flat.copy()
+        qvel = self.data.qvel.flat.copy()
+
+        #import IPython
+        #IPython.embed()
+
+        qpos[9+i*7:12+i*7] = pos.copy()
+        qvel[9+i*7:15+i*7] = 0
+        self.set_state(qpos, qvel)
 
     def _reset_hand(self):
         for _ in range(10):
             self.data.set_mocap_pos('mocap', np.array([0, 0.5, 0.05]))
             self.data.set_mocap_quat('mocap', np.array([1, 0, 1, 0]))
             self.do_simulation(None, self.frame_skip)
-
-    def put_obj_in_hand(self):
-        new_obj_pos = self.data.get_site_xpos('endeffector')
-        new_obj_pos[1] -= 0.01
-        self.do_simulation(-1)
-        self.do_simulation(1)
-        self._set_obj_xyz(new_obj_pos)
 
     def set_to_goal(self, goal):
         state_goal = goal['state_desired_goal']
@@ -218,46 +250,9 @@ class SawyerPickPlaceEnv(MultitaskEnv, SawyerXYZEnv):
             self.data.set_mocap_quat('mocap', np.array([1, 0, 1, 0]))
             # keep gripper closed
             self.do_simulation(np.array([1]))
-        self._set_obj_xyz(state_goal[3:])
+        self._set_objs_xyz(state_goal[3:])
         self.sim.forward()
 
-    """
-    Multitask functions
-    """
-    def get_goal(self):
-        return {
-            'desired_goal': self._state_goal,
-            'state_desired_goal': self._state_goal,
-        }
-
-
-    def sample_goals(self, batch_size):
-        if self.fix_goal:
-            goals = np.repeat(
-                self.fixed_goal.copy()[None],
-                batch_size,
-                0
-            )
-        else:
-            goals = np.random.uniform(
-                self.hand_and_obj_space.low,
-                self.hand_and_obj_space.high,
-                size=(batch_size, self.hand_and_obj_space.low.size),
-            )
-
-
-        # num_objs_in_hand = int(batch_size * p_obj_in_hand)
-
-        # # Put object in hand
-        # goals[:num_objs_in_hand, 3:] = goals[:num_objs_in_hand, :3].copy()
-        # goals[:num_objs_in_hand, 4] -= 0.01
-
-        # # Put object one the table (not floating)
-        # goals[num_objs_in_hand:, 5] = self.obj_init_pos[2]
-        return {
-            'state_desired_goal': goals,
-
-        }
 
 
 
@@ -269,75 +264,26 @@ class SawyerPickPlaceEnv(MultitaskEnv, SawyerXYZEnv):
 
         rightFinger, leftFinger = self.get_site_pos('rightEndEffector'), self.get_site_pos('leftEndEffector')
 
-        heightTarget = self._state_goal[3]
         placingGoal = self._state_goal[:3]
-
         objPos = self.get_body_com("obj")
 
+        placingDist = np.linalg.norm(objPos[0:2] - placingGoal)
 
-        fingerCOM = (rightFinger + leftFinger)/2
+        if self.sparse == 'no':
+            fingerCOM = (rightFinger + leftFinger)/2
 
+            graspDist = np.linalg.norm(objPos - fingerCOM)
+            graspRew = -graspDist
 
-        graspDist = np.linalg.norm(objPos - fingerCOM)
-        graspRew = -graspDist
+            reward = graspRew - 10 * placingDist # + pickRew
+        else:
 
-
-        def graspAttained():
-            if graspDist <0.1:
-                return True
-
+            if np.linalg.norm(placingDist) < self.radius_reward:
+                reward = -placingDist + self.radius_reward
             else:
-                return False
+                reward = 0.0
 
-        def pickCompletionCriteria():
-
-            tolerance = 0.01
-
-            if objPos[2] >= (heightTarget - tolerance):
-                return True
-            else:
-                return False
-
-
-        if pickCompletionCriteria():
-
-            self.pickCompleted = True
-
-        def pickReward():
-
-            if self.pickCompleted and graspAttained():
-                return 10*heightTarget
-
-            elif (objPos[2]> 0.025) and graspAttained():
-
-                return 10* min(heightTarget, objPos[2])
-
-            else:
-                return 0
-
-        def placeReward():
-
-
-            placingDist = np.linalg.norm(objPos - placingGoal)
-            #print(placingDist)
-
-
-            if self.pickCompleted and graspAttained():
-
-                placeRew = max(100*(self.maxPlacingDist - placingDist),0)
-
-
-                return placeRew
-
-            else:
-                return 0
-
-        #pickRew = pickReward()
-        placeRew = placeReward()
-        reward = graspRew + placeRew # + pickRew
-
-        return [reward]
-        #returned in a list because that's how compute_reward in multiTask.env expects it
+        return reward
 
     def get_diagnostics(self, paths, prefix=''):
         statistics = OrderedDict()
@@ -376,17 +322,48 @@ class SawyerPickPlaceEnv(MultitaskEnv, SawyerXYZEnv):
         self._state_goal = goal
         self._set_goal_marker(goal)
 
+    """
+    Multitask functions
+    """
+    def get_goal(self):
+        return {
+            'desired_goal': self._state_goal,
+            'state_desired_goal': self._state_goal,
+        }
+
+
+    def sample_goals(self, batch_size):
+        if self.fix_goal:
+            goals = np.repeat(
+                self.fixed_goal.copy()[None],
+                batch_size,
+                0
+            )
+        else:
+            goals = np.random.uniform(
+                self.hand_and_obj_space.low,
+                self.hand_and_obj_space.high,
+                size=(batch_size, self.hand_and_obj_space.low.size),
+            )
+
 
 if __name__ == "__main__":
-    env = SawyerPickPlaceEnv()
-    env.reset()
-    t = 0
-    while t<10000:
-        env.step(np.random.rand(3))
-        env.render()
-        #img = env.get_images()
-        #print('TEST!!!')
-        t += 1
-    # env.render()
+    for n in range(10):
+        env = SawyerPusherEnv(task=n)
+        env.reset()
+        t = 0
+        while t<1:
+            env.step(np.zeros(3))
+            #env.render()
+            #import IPython
+            #IPython.embed()
+
+            img = env.get_images()
+            import matplotlib.pyplot as plt
+            plt.imshow(img)
+            plt.savefig('task-'+str(n))
+            #print('TEST!!!')
+            t += 1
+        # env.render()
         #import IPython
         #IPython.embed()

@@ -2,7 +2,7 @@
 <mujoco>
     <include file="shared_config.xml"></include>
     <worldbody>
-      <camera name="camera_images" pos="-0.02 0.7 1.0"/>
+      <camera name="camera_images" pos="0.0 1.65 0.85" quat="0.92 -0.38 0 0 " fovy="35"/>
         <include file="sawyer_xyz_base.xml"></include>
 
 
