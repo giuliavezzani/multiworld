@@ -64,8 +64,8 @@ class SawyerPusherEnv(MultitaskEnv, SawyerXYZEnv):
         goal_high = np.hstack((self.hand_high, obj_high))
 
         self.hand_and_obj_space = Box(
-            np.hstack((self.hand_low, obj_low, obj_low, obj_low, obj_low)),
-            np.hstack((self.hand_high, obj_high, obj_high, obj_high, obj_high)),
+            np.hstack((self.hand_low, obj_low, obj_low, obj_low, obj_low, self.hand_low)),
+            np.hstack((self.hand_high, obj_high, obj_high, obj_high, obj_high, self.hand_high)),
         )
         """self.observation_space = Dict([
             ('observation', self.hand_and_obj_space),
@@ -130,7 +130,8 @@ class SawyerPusherEnv(MultitaskEnv, SawyerXYZEnv):
     def _get_obs(self):
         e = self.get_endeff_pos()
         b = self.get_obj_pos()
-        flat_obs = np.concatenate((e, b))
+        f = self.get_fingers_com()
+        flat_obs = np.concatenate((e, b, f))
 
         #print(flat_obs)
 
@@ -170,6 +171,10 @@ class SawyerPusherEnv(MultitaskEnv, SawyerXYZEnv):
                                self.data.get_body_xpos('obj2').copy(),
                                self.data.get_body_xpos('obj3').copy(),
                                self.data.get_body_xpos('obj4').copy()))
+
+    def get_fingers_com(self):
+        rightFinger, leftFinger = self.get_site_pos('rightEndEffector'), self.get_site_pos('leftEndEffector')
+        return  (rightFinger + leftFinger)/2
 
 
     def _set_goal_marker(self, goal):
@@ -355,8 +360,8 @@ if __name__ == "__main__":
         while t<1:
             env.step(np.zeros(3))
             #env.render()
-            #import IPython
-            #IPython.embed()
+            import IPython
+            IPython.embed()
 
             img = env.get_images()
             import matplotlib.pyplot as plt
